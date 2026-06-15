@@ -50,7 +50,7 @@ def init():
 
 
 def gametick(coeff=1):
-    data["learning rate"] = data["solved tasks"] ** 2
+    data["learning rate"] = (data["solved tasks"] + 1) ** 2
     data["exp"] += data["learning rate"] * coeff
 
 
@@ -122,7 +122,7 @@ def timerThrd(func, interval, autostart=True, *args):
 
 #options
 def solveTask():
-
+    pass
 
 
 #start game
@@ -148,7 +148,7 @@ Your choice: '''
     if c == "iamCHEATER":
         for i in data.keys():
             data[i] = 1e100
-        print(style("\nSet all resources to 1e100", 1, 91))
+        print(style("\nCheater mode enabled", 1, 91))
         input()
     elif c == "0":
         save()
