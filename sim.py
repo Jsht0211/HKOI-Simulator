@@ -46,7 +46,7 @@ def succ(txt):
 
 def wait():
     ln()
-    print(style("Press enter to continue...", 2))
+    print(style("Press enter to continue...", 3))
     input()
 
 def scan(txt, dtype, keep_trying=True, filtera=lambda x: False, filterb=lambda x: True, fail_msg="Input not in range"):
@@ -89,14 +89,14 @@ def init():
     prices = {
         "exp": None,
         "learning rate": None,
-        "solved tasks": [300, "exp"],
-        "tick speed": [20, "solved tasks"]
+        "solved tasks": {"exp": 30},
+        "tick speed": {"solved tasks": 20}
     }
 
 
 
 def gametick(coeff=1):
-    data["learning rate"] = (data["solved tasks"] + 1) ** 2
+
     data["exp"] += data["learning rate"] * coeff
 
 
@@ -193,6 +193,24 @@ def settingsPage():
 
 
 
+def upgrades():
+    clr()
+    title("Upgrades")
+    for i, j in data.items():
+        print(f"{i}: {j:.3g}")
+    ln()
+    tmp = list(prices.items())
+    for i, j in tmp:
+        if j is None: continue
+        print(style("Requirements for upgrading ", 4) + style(f"'{i}'", 4, 94) + ":")
+        for k, l in j.items():
+            diff = data[k] - l
+            print(k + ": " + style(f"{l:.3g}", 91 if data[k] - l < 0 else (92 if data[k] - l > 0 else 93)))
+        if i != tmp[-1][0]: print()
+    wait()
+
+
+
 #start game
 load()
 autosv_thrd = timerThrd(save, 30)
@@ -207,11 +225,14 @@ while True:
 f'''
 Options:
 0. Save and exit
-1. Settings'''
+1. Settings
+2. Upgrades'''
     )
-    c = scan("Your choice: ", int, True, lambda x: x == "", lambda x: 0 <= x and x <= 1)
+    c = scan("Your choice: ", int, True, lambda x: x == "", lambda x: 0 <= x and x <= 2)
     if c == 0:
         save()
         exit()
     elif c == 1:
         settingsPage()
+    elif c == 2:
+        upgrades()
