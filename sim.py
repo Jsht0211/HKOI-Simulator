@@ -8,6 +8,7 @@ import os
 
 #constants
 TICK_INTERVAL = 0.05 #tick interval in seconds
+NIR = "Input not in range" #input not in range
 
 
 
@@ -49,7 +50,13 @@ def wait():
     print(style("Press enter to continue...", 3))
     input()
 
-def scan(txt, dtype, keep_trying=True, filtera=lambda x: False, filterb=lambda x: True, fail_msg="Input not in range"):
+def nofilt(x):
+    return False
+
+def blank(x):
+    return x == ""
+
+def scan(txt, dtype, keep_trying=True, filtera=nofilt, *filters): #filtera: filters before checking type, filters: filters & failmessages after checking type
     while True:
         try:
             ln()
@@ -57,11 +64,14 @@ def scan(txt, dtype, keep_trying=True, filtera=lambda x: False, filterb=lambda x
             c = input()
             if filtera(c): return c
             c = dtype(c)
-            if filterb(c):
-                return c
-            else:
-                error(fail_msg)
-        except Exception:
+            ok = True
+            for i in range(0, len(filters) - 1, 2):
+                if not filters[i](c):
+                    error(filters[i + 1])
+                    ok = False
+                    break
+            if ok: return c
+        except Exception as e:
             error(f"Input should in type of '{dtype.__name__}'")
         if not keep_trying: break
     return None
@@ -89,19 +99,19 @@ def init():
     prices = {
         "exp": None,
         "learning rate": None,
-        "solved tasks": {"exp": 30},
-        "tick speed": {"solved tasks": 20}
+        "solved tasks": {"exp": [30, 1.1]},
+        "tick speed": {"solved tasks": [20, 1.05]}
     }
 
 
 
 def gametick(coeff=1):
-
+    data["learning rate"] = 1 + 0.05 * data["solved tasks"]
     data["exp"] += data["learning rate"] * coeff
 
 
 
-def update(interval):
+def update(interval, show=True):
     ticks = math.ceil(interval * data["tick speed"])
     coe = 1
     if ticks > settings["maximum tick simulation"]:
@@ -110,10 +120,11 @@ def update(interval):
     step = max(1, ticks // 7)
     for i in range(ticks):
         gametick(coe)
-        if settings["visualize process of loading data"] == "off": continue
-        print(f"\rSimulating ticks...   ({i + 1}/{ticks})", end="")
-        if (i + 1) % step == 0: time.sleep(0.15)
-    print()
+        if show:
+            if settings["visualize process of loading data"] == "off": continue
+            print(f"\rSimulating ticks...   ({i + 1}/{ticks})", end="")
+            if (i + 1) % step == 0: time.sleep(0.15)
+    if show: print()
 
 
 
@@ -178,43 +189,94 @@ def timerThrd(func, interval, autostart=True, *args):
 
 #options
 def settingsPage():
-    clr()
-    title("Settings")
-    for i, k in enumerate(settings.keys()):
-        print(f"{i + 1}. {k}: {settings[k]}")
-    c = scan("Modify settings: ", int, True, lambda x: x == "", lambda x: 1 <= x and x <= len(settings))
-    if c == "": return
-    k = list(settings.keys())[c - 1]
-    c = scan(f"Change '{k}' to: ", type(settings[k]), False, filterb=settings_filt[k][0], fail_msg=settings_filt[k][1])
-    if c is not None:
-        settings[k] = c
-        succ(f"Changed the value of '{k}' to '{c}' successfully!")
-    wait()
+    while True:
+        clr()
+        title("Settings")
+        for i, k in enumerate(settings.keys()):
+            print(f"{i + 1}. {k}: {settings[k]}")
+        c = scan("Modify settings: ", int, True, blank, lambda x: 1 <= x and x <= len(settings), NIR)
+        if c == "": return
+        k = list(settings.keys())[c - 1]
+        c = scan(f"Change '{k}' to: ", type(settings[k]), False, nofilt, settings_filt[k][0], settings_filt[k][1])
+        if c is not None:
+            settings[k] = c
+            succ(f"Changed the value of '{k}' to '{c}' successfully!")
+        wait()
 
 
 
 def upgrades():
-    clr()
-    title("Upgrades")
-    for i, j in data.items():
-        print(f"{i}: {j:.3g}")
-    ln()
-    tmp = list(prices.items())
-    for i, j in tmp:
-        if j is None: continue
-        print(style("Requirements for upgrading ", 4) + style(f"'{i}'", 4, 94) + ":")
-        for k, l in j.items():
-            diff = data[k] - l
-            print(k + ": " + style(f"{l:.3g}", 91 if data[k] - l < 0 else (92 if data[k] - l > 0 else 93)))
-        if i != tmp[-1][0]: print()
-    wait()
+    while True:
+        clr()
+        title("Upgrades")
+        for i, j in data.items():
+            print(f"{i}: {j:.3g}")
+        ln()
+        tmp = list(prices.items())
+        cnt = 0
+        vkeys = [[True]]
+        val = {}
+        print("Requirements for upgrading:")
+        print("0. " + style("Buy maximum number of resources\n", 4, 94))
+        for i, j in tmp:
+            if j is None: continue
+            cnt += 1
+            vkeys.append([True, i])
+            val[i] = cnt
+            print(f"{cnt}. " + style(str(i), 4, 94) + ":")
+            for k, l in j.items():
+                rem = data[k] - l[0]
+                print(k + ": " + style(f"{l[0]:.3g}", 91 if rem < 0 else (92 if rem > 0 else 93)))
+                vkeys[cnt].append((k, rem))
+                if rem < 0:
+                    vkeys[cnt][0] = False
+                    break
+            if i != tmp[-1][0]: print()
+        c = scan("Attribute to upgrade: ", int, True, blank, lambda x: 0 <= x and x <= cnt, NIR, lambda x: vkeys[x][0], "Not enough resources")
+        if c == "": return
+        if c != 0:
+            for i in range(2, len(vkeys[c])):
+                data[vkeys[c][i][0]] = vkeys[c][i][1]
+                t = prices[vkeys[c][1]][vkeys[c][i][0]]
+                t[0] *= t[1]
+            data[vkeys[c][1]] += 1
+            succ(f"Upgraded '{vkeys[c][1]}' successfully!")
+        else:
+            num = {}
+            for i, j in list(prices.items()):
+                if j is None or not vkeys[val[i]][0]: continue
+                num[i] = 0
+                while True:
+                    ok = True
+                    for k, l in j.items():
+                        if data[k] < l[0]:
+                            ok = False
+                            break
+                    if not ok: break
+                    for k, l in j.items():
+                        data[k] -= l[0]
+                        t = prices[i][k]
+                        t[0] *= t[1]
+                    data[i] += 1
+                    num[i] += 1
+            s = "Bought:"
+            b = False
+            for i, j in num.items():
+                if j == 0: continue
+                b = True
+                s += f"\n - {i}: {j:.3g}"
+            if not b:
+                error("Not enough resources to buy anything")
+            else:
+                succ(s)
+        wait()
 
 
 
 #start game
 load()
-autosv_thrd = timerThrd(save, 30)
-gametk_thrd = timerThrd(gametick, TICK_INTERVAL, True, data["tick speed"] * TICK_INTERVAL)
+autosv_thrd = timerThrd(save, 30, True)
+gametk_thrd = timerThrd(update, TICK_INTERVAL, True, TICK_INTERVAL, False)
 
 while True:
     clr()
@@ -228,8 +290,11 @@ Options:
 1. Settings
 2. Upgrades'''
     )
-    c = scan("Your choice: ", int, True, lambda x: x == "", lambda x: 0 <= x and x <= 2)
-    if c == 0:
+    c = scan("Your choice: ", int, True, lambda x: x == "" or x == "iamcheater", lambda x: 0 <= x and x <= 2, NIR)
+    if c == "iamcheater":
+        for i in data:
+            data[i] *= 1e100
+    elif c == 0:
         save()
         exit()
     elif c == 1:
